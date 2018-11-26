@@ -44,19 +44,20 @@ def normalize_data(data):
     return data
 
 # Helper functions to create weights, biases, convolution and pooling layers
-def weights(shape):
+def weights(shape, name=None):
     initial = tf.truncated_normal(shape, stddev=0.1)
-    return tf.Variable(initial)
+    return tf.Variable(initial, name=name)
 
-def bias(shape):
+def bias(shape, name=None):
     initial = tf.constant(0.1, shape = shape)
-    return tf.Variable(initial)
+    return tf.Variable(initial, name=name)
 
-def conv(x, W):
-    return tf.nn.conv2d(x,W, strides=[1,1,1,1], padding='SAME')
+def conv(x, W, name=None):
+    return tf.nn.conv2d(x,W, strides=[1,1,1,1], padding='SAME', name=name)
 
-def max_pool(x):
-    return tf.nn.max_pool(x, ksize=[1,2,2,1], strides=[1,2,2,1], padding='SAME')
+def max_pool(x, name=None):
+    return tf.nn.max_pool(x, ksize=[1,2,2,1], strides=[1,2,2,1], padding='SAME', name=name)
+
 
 # Function display an image
 def display(img):
@@ -94,7 +95,7 @@ with tf.name_scope('Conv1'):
     W_conv1 = weights([5,5,1,32], name="weights")
     b_conv1 = bias([32], name="bias")
     # Do convolution on images, add bias and push through RELU activation
-    h_conv1 = tf.nn.relu(conv(x_image, W_conv1) + b_conv1, name="relu")
+    h_conv1 = tf.nn.relu(conv(x_image, W_conv1) + b_conv1, name="tanh")
     # take results and run through max_pool
     h_pool1 = max_pool(h_conv1, name="pool")
 
@@ -105,7 +106,7 @@ with tf.name_scope('Conv2'):
     W_conv2 = weights([5,5,32,64], name="weights")
     b_conv2 = bias([64], name="bias")
     # Do convolution of the output of the 1st convolution layer.  Pool results 
-    h_conv2 = tf.nn.relu(conv(h_pool1, W_conv2) + b_conv2, name="relu")
+    h_conv2 = tf.nn.relu(conv(h_pool1, W_conv2) + b_conv2, name="tanh")
     h_pool2 = max_pool(h_conv2, name="pool")
     
 with tf.name_scope('FC'):    
@@ -115,18 +116,20 @@ with tf.name_scope('FC'):
 
     # Connect output of 2 pooling layer as input to fully connected layer
     h_pool2_flat = tf.reshape(h_pool2, [-1, 7*7*64])
-    h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1, name="relu")
+    h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1, name="tanh")
 
 # Perform dropout
 keep_prob = tf.placeholder(tf.float32)
 h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
-with tf.name_scope("Readout"):
+with tf.name_scope("FC1"):
     # Output layer
     W_fc2 = weights([1024, 10])
     b_fc2 = bias([10])
 
+
 # Define output
+    
 y_conv = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
 
 # Loss measurement
