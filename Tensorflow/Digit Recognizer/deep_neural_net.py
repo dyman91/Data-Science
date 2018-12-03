@@ -19,11 +19,13 @@ image_width = 28
 image_height = 28
 num_classes = 10
 learning_rate = 0.002
+epochs = 6
+epsilon = 1e-3
 
 # Load input data
 def load_data():
-    train_set = pd.read_csv('train.csv')
-    test_set = pd.read_csv('test.csv')
+    train_set = pd.read_csv('data/train.csv')
+    test_set = pd.read_csv('data/test.csv')
 
     x_train = train_set.iloc[:, 1:].values
     y_train = train_set.iloc[:, 0].values
@@ -95,7 +97,7 @@ with tf.name_scope('Conv1'):
     W_conv1 = weights([5,5,1,32], name="weights")
     b_conv1 = bias([32], name="bias")
     # Do convolution on images, add bias and push through RELU activation
-    h_conv1 = tf.nn.relu(conv(x_image, W_conv1) + b_conv1, name="tanh")
+    h_conv1 = tf.nn.relu(conv(x_image, W_conv1) + b_conv1, name="relu")
     # take results and run through max_pool
     h_pool1 = max_pool(h_conv1, name="pool")
 
@@ -106,17 +108,25 @@ with tf.name_scope('Conv2'):
     W_conv2 = weights([5,5,32,64], name="weights")
     b_conv2 = bias([64], name="bias")
     # Do convolution of the output of the 1st convolution layer.  Pool results 
-    h_conv2 = tf.nn.relu(conv(h_pool1, W_conv2) + b_conv2, name="tanh")
+    h_conv2 = tf.nn.relu(conv(h_pool1, W_conv2) + b_conv2, name="relu")
     h_pool2 = max_pool(h_conv2, name="pool")
     
 with tf.name_scope('FC'):    
     # Fully connected layer
     W_fc1 = weights([7*7*64, 1024], name="weights")
     b_fc1 = bias([1024], name="bias")
-
+    
     # Connect output of 2 pooling layer as input to fully connected layer
     h_pool2_flat = tf.reshape(h_pool2, [-1, 7*7*64])
-    h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1, name="tanh")
+    z_fc1 = tf.matmul(h_pool2_flat, W_fc1) + b_fc1
+    
+    # Batch normalization on FC1 layer 
+    batch_mean, batch_var = tf.nn.moments(z_fc1,[0])
+    scale = tf.Variable(tf.ones([1024]))
+    beta = tf.Variable(tf.ones([1024]))
+    z_fc1_batch_norm = tf.nn.batch_normalization(z_fc1,batch_mean,batch_var,beta,scale,epsilon)
+    
+    h_fc1 = tf.nn.relu(z_fc1_batch_norm, name="relu")
 
 # Perform dropout
 keep_prob = tf.placeholder(tf.float32)
@@ -128,8 +138,7 @@ with tf.name_scope("FC1"):
     b_fc2 = bias([10])
 
 
-# Define output
-    
+# Define output 
 y_conv = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
 
 # Loss measurement
@@ -160,7 +169,7 @@ import time
 #  define number of steps and how often we display progress
 mini_batch_size = 100
 num_steps = x_train.shape[0]//mini_batch_size
-display_every = 20
+display_every = 100
 
 # Create input object which reads data from MNIST datasets. 
 # This dataset will be used as validation set 
@@ -171,25 +180,27 @@ mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
 start_time = time.time()
 end_time = time.time()
 
-for i in range(num_steps):
-    start = i * mini_batch_size
-    end = start + mini_batch_size
-    x_batch = x_train[start:end, :]
-    y_batch = y_train[start:end, :]
-    train_step.run(feed_dict={x: x_batch, y: y_batch, keep_prob: 0.7})
-
-    # Periodic status display
-    if i%display_every == 0:
-        train_accuracy = accuracy.eval(feed_dict={
-            x:x_batch, y: y_batch, keep_prob: 1.0})
-        end_time = time.time()
-        print("step {0}, elapsed time {1:.2f} seconds, training accuracy {2:.3f}%".format(i, end_time-start_time, train_accuracy*100.0))
+for epoch in range(epochs):
+    print("epoch {0}".format(epoch))
+    for i in range(num_steps):
+        start = i * mini_batch_size
+        end = start + mini_batch_size
+        x_batch = x_train[start:end, :]
+        y_batch = y_train[start:end, :]
+        train_step.run(feed_dict={x: x_batch, y: y_batch, keep_prob: 0.7})
+    
+        # Periodic status display
+        if i%display_every == 0:
+            train_accuracy = accuracy.eval(feed_dict={
+                x:x_batch, y: y_batch, keep_prob: 1.0})
+            end_time = time.time()
+            print("step {0}, elapsed time {1:.2f} seconds, training accuracy {2:.3f}%".format(i, end_time-start_time, train_accuracy*100.0))
 
 
 # Display summary 
 #     Time to train
 end_time = time.time()
-print("Total training time for {0} batches: {1:.2f} seconds".format(i+1, end_time-start_time))
+print("Total training time: {0:.1f} seconds".format(end_time-start_time))
 
 # Accuracy on validation set data
 print("Validation set accuracy {0:.3f}%".format(accuracy.eval(feed_dict={
